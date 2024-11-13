@@ -2888,17 +2888,11 @@ class HookLineSinkerUI:
                                   text="Quick Support - Copy all Debug Info", 
                                   command=self.copy_support_info)
         support_button.grid(row=0, column=0, pady=(0,10), sticky="ew")
-        
-        windef_button = ttk.Button(quick_support_frame, 
-                                  text="Windows Defender - Add to exclusions", 
-                                  command=self.shut_up_windef)
-        windef_button.grid(row=1, column=0, sticky="ew")
 
         ttk.Separator(troubleshoot_frame, orient="horizontal").grid(
             row=1, column=0, columnspan=3, sticky="ew", pady=5)
 
-        self.toggle_gdweave_button = ttk.Button(troubleshoot_frame, text="Unused Button", command=self.toggle_gdweave, state="disabled")
-        self.toggle_gdweave_button.grid(row=2, column=0, pady=5, padx=5, sticky="ew")
+        ttk.Button(troubleshoot_frame, text="Add to Exclusions List", command=self.shut_up_windef).grid(row=2, column=0, pady=5, padx=5, sticky="ew")
         ttk.Button(troubleshoot_frame, text="Clear GDWeave Mods", command=self.clear_gdweave_mods).grid(row=2, column=1, pady=5, padx=5, sticky="ew")
         ttk.Button(troubleshoot_frame, text="Clear HLS Mods", command=self.clear_hls_mods).grid(row=2, column=2, pady=5, padx=5, sticky="ew")
 
@@ -2918,24 +2912,28 @@ class HookLineSinkerUI:
         threading.Thread(target=self.update_latest_version_label, daemon=True).start()
         self.root.after(100, self.process_gui_queue)
 
-        # dexrn: shut up windows defender
+    # dexrn: shut up windows defender
     def shut_up_windef(self):
         # yes this is kinda janky.
         # the rest of the code is janky tho sooooooooo
+        # add detection here later if HLS is not in folder (1.4.0)
         if messagebox.askyesno(
             "Windows Defender Exclusion",
-            "Windows Defender will sometimes falsely flag GDWeave and/or HLS as a virus...\n"
-            "You can avoid this by adding both HLS and GDWeave to the exclusions list.\n\n"
-            "Would you like to try to add both to the exclusions list?\n"
-            "Please make sure you have HLS in it's own folder before proceeding."
+            "Windows Defender may incorrectly detect HLS or GDWeave as threats. Would you like to add them to Windows Defender's exclusion list?"
         ):
-            # make sure not to add mods in case some mod is a virus for whatever reason
-            # inb4 mod false positives
+            # Check if we're on Windows first
+            if not sys.platform.startswith('win'):
+                messagebox.showerror(
+                    "Unsupported Operating System",
+                    "This feature is only available on Windows."
+                )
+                return
+                
             if (self.settings['game_path'] != ''):
                 if (self.is_gdweave_installed()):
                     if ctypes.windll.shell32.IsUserAnAdmin():
                         # have to replace / with \ because windows moment... thanks microsoft
-                        gdweave_core = os.path.join(self.settings['game_path'], 'GDWeave', 'core').replace("/", "\\")
+                        gdweave_core = os.path.join(self.settings['game_path']).replace("/", "\\")
                         res = subprocess.run(
                             ["powershell", "-Command", f"Add-MpPreference -ExclusionPath '{gdweave_core}'"],
                             capture_output=True,
@@ -2943,9 +2941,9 @@ class HookLineSinkerUI:
                         )
                         if not res.returncode == 0:
                             messagebox.showinfo(
-                                "Failed to add to exclusions list",
-                                "Couldn't add GDWeave to the exclusions list\n"
-                                "you may have to do it manually.",
+                                "Failed to Add GDWeave Exception",
+                                "Unable to add GDWeave to Windows Defender exceptions.\n"
+                                "You may need to add it manually in Windows Security settings.",
                                 icon='warning',
                             )
                             return
@@ -2958,39 +2956,38 @@ class HookLineSinkerUI:
                         )
                         if not res.returncode == 0:
                             messagebox.showinfo(
-                                "Failed to add to exclusions list",
-                                "Couldn't add HLS to the exclusions list\n"
-                                "you may have to do it manually.",
+                                "Failed to Add HLS Exception", 
+                                "Unable to add Hook, Line, & Sinker to Windows Defender exceptions.\n"
+                                "You may need to add it manually in Windows Security settings.",
                                 icon='warning',
                             )
                             return
                             
                         # if we got here it worked (LMFAO)
                         messagebox.showinfo(
-                            "Exclusions added",
-                            "HLS and GDWeave have been added to the Windows Defender exclusion list\n",
+                            "Exclusions Added Successfully",
+                            "HLS and GDWeave have been added to the Windows Defender exclusion list!\n",
                             icon='info',
                         )
                     else:
                         messagebox.showinfo(
-                            "No admin privileges",
-                            "You must run HLS as administrator to add exclusions.\n"
-                            "Please close HLS, and right click > Run as administrator.",
+                            "Administrator Access Required",
+                            "Administrator privileges are required to modify Windows Defender settings.\n"
+                            "Please close Hook, Line & Sinker and relaunch it by right-clicking and selecting 'Run as administrator'.",
                             icon='warning',
                         )
                         return
                 else:
                     messagebox.showinfo(
-                        "GDWeave not installed",
-                        "GDWeave is not installed, please install it and try again.",
+                        "GDWeave Not Installed",
+                        "GDWeave is not installed please install it via the HLS Setup tab and try again.",
                         icon='warning',
                     )
                     return
             else:
                 messagebox.showinfo(
-                    "Game path not set",
-                    "Please set the game installation path in the HLS Setup path\n"
-                    "then go to Settings > Add to Windows Defender Exclusions List.",
+                    "Game Path Required",
+                    "Please set your WEBFISHING installation path in the HLS Setup tab before adding Windows Defender exceptions. You can get here again by clicking 'Add to Exclusions List' in HLS Settings.",
                     icon='warning',
                 )
                 return
