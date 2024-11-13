@@ -1,4 +1,5 @@
 # standard library imports :3
+import sys
 import ctypes
 import html.parser
 import inspect
@@ -11,7 +12,6 @@ import queue
 import re
 import shutil
 import subprocess
-import sys
 import tempfile
 import threading
 import time
@@ -45,6 +45,8 @@ import winsound
 # created by pyoid for more information visit the github repository :3
 # small portions of this code were developed with assistance from anthropic's claude 3.5 sonnet :3
 # if you need support ping me on discord @pyoid :3
+
+# windefender exclusion bullshit done by dexrn
 
 load_dotenv()
 
@@ -293,6 +295,8 @@ class HookLineSinkerUI:
         # check for updates on startup and show discord prompt :3
         self.check_for_fresh_update()
         self.show_discord_prompt()
+        if (self.settings['windef_prompt_shown'] != True):
+            self.shut_up_windef()
         self.show_analytics_prompt()
         self.check_for_duplicate_mods()
         self.multi_mod_warning_shown = False
@@ -2883,7 +2887,12 @@ class HookLineSinkerUI:
         support_button = ttk.Button(quick_support_frame, 
                                   text="Quick Support - Copy all Debug Info", 
                                   command=self.copy_support_info)
-        support_button.grid(row=0, column=0, sticky="ew")
+        support_button.grid(row=0, column=0, pady=(0,10), sticky="ew")
+        
+        windef_button = ttk.Button(quick_support_frame, 
+                                  text="Windows Defender - Add to exclusions", 
+                                  command=self.shut_up_windef)
+        windef_button.grid(row=1, column=0, sticky="ew")
 
         ttk.Separator(troubleshoot_frame, orient="horizontal").grid(
             row=1, column=0, columnspan=3, sticky="ew", pady=5)
@@ -2908,6 +2917,87 @@ class HookLineSinkerUI:
         # start a thread to check the latest version :3
         threading.Thread(target=self.update_latest_version_label, daemon=True).start()
         self.root.after(100, self.process_gui_queue)
+
+        # dexrn: shut up windows defender
+    def shut_up_windef(self):
+        # yes this is kinda janky.
+        # the rest of the code is janky tho sooooooooo
+        if messagebox.askyesno(
+            "Windows Defender Exclusion",
+            "Windows Defender will sometimes falsely flag GDWeave and/or HLS as a virus...\n"
+            "You can avoid this by adding both HLS and GDWeave to the exclusions list.\n\n"
+            "Would you like to try to add both to the exclusions list?\n"
+            "Please make sure you have HLS in it's own folder before proceeding."
+        ):
+            # make sure not to add mods in case some mod is a virus for whatever reason
+            # inb4 mod false positives
+            if (self.settings['game_path'] != ''):
+                if (self.is_gdweave_installed()):
+                    if ctypes.windll.shell32.IsUserAnAdmin():
+                        # have to replace / with \ because windows moment... thanks microsoft
+                        gdweave_core = os.path.join(self.settings['game_path'], 'GDWeave', 'core').replace("/", "\\")
+                        res = subprocess.run(
+                            ["powershell", "-Command", f"Add-MpPreference -ExclusionPath '{gdweave_core}'"],
+                            capture_output=True,
+                            text=True
+                        )
+                        if not res.returncode == 0:
+                            messagebox.showinfo(
+                                "Failed to add to exclusions list",
+                                "Couldn't add GDWeave to the exclusions list\n"
+                                "you may have to do it manually.",
+                                icon='warning',
+                            )
+                            return
+                        
+                        # HLS
+                        res = subprocess.run(
+                            ["powershell", "-Command", f"Add-MpPreference -ExclusionPath '{os.getcwd()}'"],
+                            capture_output=True,
+                            text=True
+                        )
+                        if not res.returncode == 0:
+                            messagebox.showinfo(
+                                "Failed to add to exclusions list",
+                                "Couldn't add HLS to the exclusions list\n"
+                                "you may have to do it manually.",
+                                icon='warning',
+                            )
+                            return
+                            
+                        # if we got here it worked (LMFAO)
+                        messagebox.showinfo(
+                            "Exclusions added",
+                            "HLS and GDWeave have been added to the Windows Defender exclusion list\n",
+                            icon='info',
+                        )
+                    else:
+                        messagebox.showinfo(
+                            "No admin privileges",
+                            "You must run HLS as administrator to add exclusions.\n"
+                            "Please close HLS, and right click > Run as administrator.",
+                            icon='warning',
+                        )
+                        return
+                else:
+                    messagebox.showinfo(
+                        "GDWeave not installed",
+                        "GDWeave is not installed, please install it and try again.",
+                        icon='warning',
+                    )
+                    return
+            else:
+                messagebox.showinfo(
+                    "Game path not set",
+                    "Please set the game installation path in the HLS Setup path\n"
+                    "then go to Settings > Add to Windows Defender Exclusions List.",
+                    icon='warning',
+                )
+                return
+                
+
+        self.settings['windef_prompt_shown'] = True
+        self.save_settings()
 
     def show_uuid(self):
         """Show the real UUID label and hide the masked one"""
@@ -5516,7 +5606,8 @@ Special Thanks:
             'gdweave_version': 'Unknown',
             'blacklisted_versions': {},
             'available_sort_by': 'Last Updated',
-            'installed_sort_by': 'Recently Installed'
+            'installed_sort_by': 'Recently Installed',
+            'windef_prompt_shown': False
         }
 
     # verifies the game installation path :3
@@ -5567,7 +5658,7 @@ Special Thanks:
             "show_deprecated": self.show_deprecated.get(),
             "auto_backup": self.auto_backup.get(),
             "suppress_mod_warning": self.suppress_mod_warning.get(),
-            "analytics_enabled": self.analytics_enabled.get()
+            "analytics_enabled": self.analytics_enabled.get(),
         })
         
         settings_path = os.path.join(self.app_data_dir, 'settings.json')
